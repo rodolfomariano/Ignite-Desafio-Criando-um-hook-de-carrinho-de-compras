@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, useState } from 'react';
+import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
 import { api } from '../services/api';
 import { Product, Stock } from '../types';
@@ -14,6 +14,7 @@ interface UpdateProductAmount {
 
 interface CartContextData {
   cart: Product[];
+  stock: Stock[];
   addProduct: (productId: number) => Promise<void>;
   removeProduct: (productId: number) => void;
   updateProductAmount: ({ productId, amount }: UpdateProductAmount) => void;
@@ -22,29 +23,77 @@ interface CartContextData {
 const CartContext = createContext<CartContextData>({} as CartContextData);
 
 export function CartProvider({ children }: CartProviderProps): JSX.Element {
-  const [cart, setCart] = useState<Product[]>(() => {
-    // const storagedCart = Buscar dados do localStorage
+  const [productList, setProductList] = useState<Product[]>([])
+  const [stock, setStock] = useState<Stock[]>([])
 
-    // if (storagedCart) {
-    //   return JSON.parse(storagedCart);
-    // }
+  const [cart, setCart] = useState<Product[]>(() => {
+    const storagedCart = localStorage.getItem('@RocketShoes:cart');
+
+    if (storagedCart) {
+      return JSON.parse(storagedCart);
+    }
 
     return [];
   });
 
+  useEffect(() => {
+    api.get('products').then(response => setProductList(response.data))
+    api.get('stock').then(response => setStock(response.data))
+  }, [])
+
   const addProduct = async (productId: number) => {
+
     try {
-      // TODO
+      const toCard = cart.find(addToCard => {
+        if(addToCard.id === productId) { 
+          return toast.warning('Produto já está no carrinho');
+        }
+      })
+      stock.map(item => {
+
+        if(item.id === productId && item.amount > 0 && !toCard) {
+  
+          stock.map(find => {
+            if (find.id === item.id) { 
+              find.amount = item.amount
+
+              productList.map(product => {
+                if(product.id === productId) {
+                  setCart([...cart, {
+                    ...product,
+                    amount: 1
+                  }])
+
+                  localStorage.setItem('@RocketShoes:cart', JSON.stringify([...cart, {
+                    ...product,
+                    amount: 1
+                  }]))
+                }
+              })
+
+            }
+          })
+          
+          return toast.success('Produto adicionado com sucesso!')
+        }
+      })
+
     } catch {
-      // TODO
+      toast.error('Produto já está no carrinho');
     }
   };
 
   const removeProduct = (productId: number) => {
     try {
-      // TODO
+      const filterToRemove = cart.filter(product => product.id !== productId)
+
+      setCart(filterToRemove)
+      // localStorage.removeItem('@RocketShoes:cart')
+      localStorage.setItem('@RocketShoes:cart', JSON.stringify(filterToRemove))
+      toast.warn('Produto excluido com sucesso!')
+      
     } catch {
-      // TODO
+      toast.error('Não foi possível remover o item!');
     }
   };
 
@@ -53,7 +102,14 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     amount,
   }: UpdateProductAmount) => {
     try {
-      // TODO
+      cart.map(product => {
+        if(product.id === productId) {
+          product.amount = amount 
+          // console.log(product.amount)
+        }
+        setCart([...cart])
+        localStorage.setItem('@RocketShoes:cart', JSON.stringify([...cart]))
+      })
     } catch {
       // TODO
     }
@@ -61,7 +117,7 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
   return (
     <CartContext.Provider
-      value={{ cart, addProduct, removeProduct, updateProductAmount }}
+      value={{ cart, addProduct, removeProduct, updateProductAmount, stock }}
     >
       {children}
     </CartContext.Provider>
